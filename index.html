@@ -120,6 +120,15 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 .prog i{display:block;height:100%;background:var(--green)}
 .hist{font-size:13px;border-top:1px solid var(--line);padding:7px 0;display:flex;gap:8px;align-items:center}
 [hidden]{display:none!important}
+#lock{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+.lockbox{width:100%;max-width:340px;text-align:center}
+.lockbox h1{margin:6px 0 4px}
+.lockico{font-size:46px;line-height:1}
+.lockbox input{text-align:center;margin:8px 0 2px;font-size:20px;letter-spacing:.25em}
+.lockbox input::placeholder{letter-spacing:0;font-size:15px}
+.lockbox .btn.primary{width:100%;padding:12px;margin-top:10px}
+.lockbox .hint{text-align:left;margin:8px 2px}
+.err{color:var(--red);font-size:14px;min-height:20px;margin-top:8px}
 .c-cronico{border-left-color:#2a5d8f}.c-periodica{border-left-color:#7a55b8}.c-oxigeno{border-left-color:#2a9bb5}
 .c-siesta{border-left-color:#8a8f3a}.c-agudo{border-left-color:#c2453a}.c-cura{border-left-color:#d0631e}
 .c-glucemia{border-left-color:#b8327a}.c-peg{border-left-color:#3d8f5a}.c-dietoterapico{border-left-color:#6b8a2f}
@@ -141,6 +150,8 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
   <button data-v="ctrl"><span>⏱︎</span>Controles</button>
   <button data-v="ajustes"><span>⚙︎</span>Ajustes</button>
 </nav>
+
+<div id="lock" hidden></div>
 
 <dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -214,13 +225,115 @@ function normalize(d){
   d.v=1;return d;
 }
 
-/* ================= almacenamiento ================= */
-var db;
-try{db=normalize(JSON.parse(localStorage.getItem(KEY)||'null'))}catch(x){db=normalize(null)}
+/* ================= almacenamiento y cifrado ================= */
+var ENC='planta.enc',NOPIN='planta.nopin',LOCKMIN='planta.lockmin',ITER=600000;
+var db=normalize(null),key=null,meta=null,locked=false,subtle=!!(window.crypto&&crypto.subtle);
+function b64(buf){var a=new Uint8Array(buf),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));return btoa(s)}
+function unb64(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
+function deriveKey(pin,salt,iter){
+  return crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']).then(function(km){
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])})}
+function encStr(k,str){var iv=crypto.getRandomValues(new Uint8Array(12));
+  return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,new TextEncoder().encode(str)).then(function(ct){return b64(iv)+'.'+b64(ct)})}
+function decStr(k,data){var p=data.split('.');
+  return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(p[0])},k,unb64(p[1])).then(function(pt){return new TextDecoder().decode(pt)})}
+function blobOf(m,data){return JSON.stringify({v:1,iter:m.iter,salt:m.salt,data:data})}
+var chain=Promise.resolve();
 function save(){
+  if(locked)return;
   var lim=addDays(today(),-120);
   Object.keys(db.done).forEach(function(k){if(k.split('|')[1]<lim)delete db.done[k]});
-  try{localStorage.setItem(KEY,JSON.stringify(db))}catch(x){toast('No se ha podido guardar en este dispositivo')}
+  var str=JSON.stringify(db);
+  if(!key){try{localStorage.setItem(KEY,str)}catch(x){toast('No se ha podido guardar en este dispositivo')}return}
+  var k=key,m=meta;
+  chain=chain.then(function(){return encStr(k,str)}).then(function(d){localStorage.setItem(ENC,blobOf(m,d))}).catch(function(){toast('No se ha podido guardar (cifrado)')});
+}
+function setPin(pin){
+  var salt=crypto.getRandomValues(new Uint8Array(16)),m={iter:ITER,salt:b64(salt)},str=JSON.stringify(db),old=localStorage.getItem(ENC);
+  return chain.then(function(){return deriveKey(pin,salt,ITER)}).then(function(k){
+    return encStr(k,str).then(function(d){
+      localStorage.setItem(ENC,blobOf(m,d));
+      return decStr(k,JSON.parse(localStorage.getItem(ENC)).data);
+    }).then(function(t){
+      if(t!==str)throw new Error('verify');
+      key=k;meta=m;localStorage.removeItem(KEY);localStorage.removeItem(NOPIN);
+    }).catch(function(e){if(old)localStorage.setItem(ENC,old);else localStorage.removeItem(ENC);throw e});
+  });
+}
+function checkPin(pin){
+  return chain.then(function(){var b=JSON.parse(localStorage.getItem(ENC));
+    return deriveKey(pin,unb64(b.salt),b.iter).then(function(k){return decStr(k,b.data)}).then(function(){return true})}).catch(function(){return false});
+}
+function unlock(pin){
+  return chain.then(function(){var b=JSON.parse(localStorage.getItem(ENC));
+    return deriveKey(pin,unb64(b.salt),b.iter).then(function(k){return decStr(k,b.data).then(function(t){
+      db=normalize(JSON.parse(t));key=k;meta={iter:b.iter,salt:b.salt};locked=false})})});
+}
+function removePinNow(){
+  return chain.then(function(){localStorage.setItem(KEY,JSON.stringify(db));localStorage.removeItem(ENC);localStorage.setItem(NOPIN,'1');key=null;meta=null});
+}
+function lockMin(){var v=parseInt(localStorage.getItem(LOCKMIN),10);return isNaN(v)?2:v}
+function pinErr(a,b){
+  if(a.length<6)return 'Mínimo 6 caracteres.';
+  if(a!==b)return 'Los dos PIN no coinciden.';
+  if(/^(.)\1+$/.test(a)||['123456','654321','1234567','12345678','123456789','0123456','01234567','012345'].indexOf(a)>=0)return 'Ese PIN es demasiado fácil de adivinar.';
+  return '';
+}
+
+/* ---- pantalla de bloqueo / creación de PIN ---- */
+var fails=0,waitUntil=0;
+function lockScreen(mode){
+  var L=$('#lock'),setup=mode==='setup';
+  L.hidden=false;
+  L.innerHTML='<form class="lockbox" id="lf" autocomplete="off"><div class="lockico">🔒</div>'+
+    '<h1>'+(setup?'Protege la app con un PIN':'Planta')+'</h1>'+
+    '<p class="muted small" style="margin:0 0 6px">'+(setup?'Los datos se cifrarán en este móvil. Sin el PIN no se pueden leer.':'Escribe tu PIN para entrar')+'</p>'+
+    '<input type="password" name="p1" inputmode="numeric" autocomplete="off" placeholder="'+(setup?'PIN (mínimo 6)':'PIN')+'">'+
+    (setup?'<input type="password" name="p2" inputmode="numeric" autocomplete="off" placeholder="Repite el PIN">'+
+      '<div class="hint">Mejor 8 o más cifras, o letras y números. <b>Si lo olvidas no hay forma de recuperar los datos de este móvil:</b> tendrías que cargarlos de nuevo desde una copia.</div>':'')+
+    '<div class="err" id="lerr" role="alert"></div>'+
+    '<button class="btn primary" id="lgo">'+(setup?'Activar PIN':'Entrar')+'</button>'+
+    '<div><button type="button" class="btn ghost" id="lletters">Usar letras y números</button></div>'+
+    (setup?'<div><button type="button" class="btn ghost" id="lskip" style="color:var(--muted)">Ahora no</button></div>':'<div><button type="button" class="btn ghost" id="lforgot" style="color:var(--muted)">He olvidado el PIN</button></div>')+
+    '</form>';
+  var f=$('#lf'),err=$('#lerr'),btn=$('#lgo');
+  function setErr(m){err.textContent=m}
+  $('#lletters').onclick=function(){var ins=$$('input[type=password]',f),num=ins[0].inputMode==='numeric';
+    ins.forEach(function(i){i.inputMode=num?'text':'numeric';i.blur()});this.textContent=num?'Usar teclado numérico':'Usar letras y números';ins[0].focus()};
+  if(setup){
+    f.onsubmit=function(e){e.preventDefault();var a=f.elements.p1.value,b=f.elements.p2.value,m=pinErr(a,b);if(m){setErr(m);return}
+      btn.disabled=true;btn.textContent='Cifrando…';setErr('');
+      setPin(a).then(start).catch(function(){btn.disabled=false;btn.textContent='Activar PIN';setErr('No se ha podido activar el cifrado en este navegador.')})};
+    $('#lskip').onclick=function(){localStorage.setItem(NOPIN,'1');start()};
+  }else{
+    f.onsubmit=function(e){e.preventDefault();var now=Date.now();
+      if(now<waitUntil){setErr('Demasiados intentos. Espera '+Math.ceil((waitUntil-now)/1000)+' s.');return}
+      var pin=f.elements.p1.value;if(!pin)return;btn.disabled=true;btn.textContent='Comprobando…';
+      unlock(pin).then(function(){fails=0;start()}).catch(function(){
+        btn.disabled=false;btn.textContent='Entrar';f.elements.p1.value='';fails++;
+        if(fails>=5)waitUntil=Date.now()+30000*(fails-4);
+        setErr('PIN incorrecto'+(fails>=5?'. Espera '+(30*(fails-4))+' s.':''));f.elements.p1.focus()})};
+    $('#lforgot').onclick=function(){
+      if(!confirm('Si has olvidado el PIN, la única forma de volver a entrar es BORRAR los datos de este móvil y cargarlos de nuevo desde una copia o desde el archivo inicial. ¿Borrar los datos ahora?'))return;
+      if(!confirm('Última confirmación: se borra todo lo guardado en este móvil. No se puede deshacer.'))return;
+      localStorage.removeItem(ENC);localStorage.removeItem(KEY);localStorage.removeItem(NOPIN);db=normalize(null);key=null;meta=null;locked=false;fails=0;boot()};
+  }
+  setTimeout(function(){try{f.elements.p1.focus()}catch(x){}},60);
+}
+function lock(){
+  if(!key)return;
+  key=null;meta=null;locked=true;db=normalize(null);
+  try{if(dlg.open)dlg.close()}catch(x){}
+  view='hoy';ctx.q='';ctx.rid=null;ctx.date=today();ctx.openDue=false;
+  $('#app').innerHTML='';lockScreen('unlock');
+}
+function start(){locked=false;var L=$('#lock');L.hidden=true;L.innerHTML='';render()}
+function boot(){
+  var plain=null;
+  if(subtle&&localStorage.getItem(ENC)){locked=true;lockScreen('unlock');return}
+  try{plain=localStorage.getItem(KEY);db=normalize(plain?JSON.parse(plain):null)}catch(x){db=normalize(null)}
+  if(!subtle||localStorage.getItem(NOPIN)){start();return}
+  lockScreen('setup');
 }
 
 /* ================= residentes ================= */
@@ -332,7 +445,8 @@ function render(){
 /* ================= vista HOY ================= */
 function vHoy(){
   var s=ctx.date,t=today(),h='';
-  h+='<div class="top"><h1>'+esc(db.settings.title)+'</h1></div>';
+  h+='<div class="top"><h1>'+esc(db.settings.title)+'</h1>'+(key?'<button class="iconbtn" data-act="lockNow" aria-label="Bloquear la app">🔒</button>':'')+'</div>';
+  if(subtle&&!key)h+='<div class="banner">🔓 La app no tiene PIN: los datos están sin cifrar en este móvil. <button class="btn sm primary" data-act="setPin" style="margin-left:6px">Activar PIN</button></div>';
   if(!db.residents.length)h+='<div class="banner">Aún no hay residentes. Ve a <b>Ajustes → Cargar datos</b> para importar el archivo de la planta, o añádelos en <b>Residentes</b>.</div>';
   var sn=siarNext();
   if(sn){var dd=diffDays(t,sn.date);if(dd<=21)h+='<div class="banner">📌 <b>Corte del SIAR</b> '+(dd===0?'<b>hoy</b>':'en <b>'+dd+' días</b>')+' ('+fmt(sn.date)+'). Revisa los controles pendientes.</div>'}
@@ -483,9 +597,18 @@ function vAjustes(){
     h+='<div class="ctl" data-act="editCtrl" data-c="'+c.id+'" style="cursor:pointer"><div class="nm">'+esc(c.name)+'</div><div class="dt">Cada '+c.months+' meses'+(c.shortMal?' · '+c.monthsMal+' meses si MNA = malnutrición':'')+'</div><div class="act"><span class="btn sm ghost">Editar</span></div></div>';
   });
   h+='</div>';
+  h+='<div class="sect"><div class="hd"><h3>Seguridad</h3></div>';
+  if(!subtle)h+='<div class="note">Este navegador no permite cifrar. Abre la app desde su dirección https.</div>';
+  else if(key){
+    h+='<div class="note">🔒 PIN activado: los datos están cifrados en este móvil (AES-256).</div>'+
+      '<label class="f">Bloquear al salir de la app durante más de</label><select data-lock>'+[[0,'Nada (al salir)'],[1,'1 minuto'],[2,'2 minutos'],[5,'5 minutos'],[15,'15 minutos']].map(function(o){return '<option value="'+o[0]+'"'+(lockMin()===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+
+      '<div class="actions"><button class="btn" data-act="lockNow">Bloquear ahora</button><button class="btn" data-act="changePin">Cambiar PIN</button></div>'+
+      '<div class="actions"><button class="btn danger" data-act="removePin">Quitar PIN</button></div>';
+  }else h+='<div class="note">🔓 Sin PIN: los datos se guardan sin cifrar.</div><div class="actions"><button class="btn primary" data-act="setPin">Activar PIN</button></div>';
+  h+='</div>';
   h+='<div class="sect"><div class="hd"><h3>Datos</h3></div>'+
     '<div class="actions" style="margin-top:4px"><button class="btn primary" data-act="import">Cargar datos (.json)</button><button class="btn" data-act="export">Hacer copia</button></div>'+
-    '<div class="hint">“Cargar datos” sirve para el archivo inicial de la planta y para restaurar una copia. Sustituye todo lo que haya en el móvil.</div>'+
+    '<div class="hint">“Cargar datos” sirve para el archivo inicial de la planta y para restaurar una copia. Sustituye todo lo que haya en el móvil. Con PIN activado, las copias se cifran con ese mismo PIN.</div>'+
     '<div class="actions"><button class="btn danger" data-act="wipe">Borrar todo</button></div>'+
     '<div class="hint">'+db.residents.filter(function(r){return r.active}).length+' residentes activos · '+db.pautas.length+' pautas · '+db.records.length+' registros de controles.</div></div>';
   return h;
@@ -674,7 +797,11 @@ document.addEventListener('click',function(e){
     case 'print':window.print();break;
     case 'addCtrl':editCtrl(null);break;
     case 'editCtrl':editCtrl(C(el.dataset.c));break;
-    case 'import':$('#fileIn').click();break;
+    case 'import':noLockUntil=Date.now()+90000;$('#fileIn').click();break;
+    case 'lockNow':lock();break;
+    case 'setPin':pinDlg('set');break;
+    case 'changePin':pinDlg('change');break;
+    case 'removePin':pinDlg('remove');break;
     case 'export':exportData();break;
     case 'wipe':if(confirm('¿Borrar TODOS los datos de este dispositivo? Haz antes una copia si la necesitas.')&&confirm('Seguro. No se puede deshacer.')){db=normalize(null);save();render();toast('Todo borrado')}break;
   }
@@ -686,35 +813,93 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var el=e.target;
+  if(el.dataset.lock!==undefined){try{localStorage.setItem(LOCKMIN,el.value)}catch(x){}toast('Guardado')}
   if(el.dataset.set){db.settings[el.dataset.set]=el.value;save();toast('Guardado')}
   if(el.dataset.meal){if(el.value){db.settings.meals[el.dataset.meal]=el.value;save();toast('Guardado')}}
 });
 
 /* ================= copia / importación ================= */
-function exportData(){
-  var blob=new Blob([JSON.stringify({app:'planta5',v:1,exported:today(),db:db},null,1)],{type:'application/json'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='planta-copia-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();
+var noLockUntil=0;
+function download(text,name){
+  var blob=new Blob([text],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
   setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
-  toast('Copia descargada. Contiene los nombres si los has puesto: guárdala en sitio seguro.');
+}
+function exportData(){
+  noLockUntil=Date.now()+90000;
+  var payload=JSON.stringify({app:'planta5',v:1,exported:today(),db:db});
+  if(key){
+    var k=key,m=meta;
+    chain=chain.then(function(){return encStr(k,payload)}).then(function(d){
+      download(JSON.stringify({app:'planta5',enc:1,v:1,iter:m.iter,salt:m.salt,data:d}),'planta-copia-cifrada-'+today()+'.json');
+      toast('Copia cifrada descargada. Solo se abre con tu PIN actual.');
+    }).catch(function(){toast('No se ha podido crear la copia')});
+  }else{
+    download(JSON.stringify({app:'planta5',v:1,exported:today(),db:db},null,1),'planta-copia-'+today()+'.json');
+    toast('Copia descargada SIN cifrar. Contiene los nombres: guárdala en sitio seguro.');
+  }
+}
+function applyImport(d){
+  if(!d||!Array.isArray(d.residents))throw 0;
+  if(!confirm('Se van a cargar '+d.residents.length+' residentes y '+((d.pautas||[]).length)+' pautas. Esto SUSTITUYE lo que hay ahora en el móvil. ¿Seguir?'))return;
+  var keepSet=db.settings,keepC=db.controls;
+  db=normalize(d);if(!d.settings)db.settings=keepSet;if(!d.controls)db.controls=keepC;
+  save();go('hoy');toast('Datos cargados');
+}
+function importEnc(j){
+  openDlg('<h3>Copia cifrada</h3><p class="muted small">Escribe el PIN con el que se hizo la copia.</p>'+
+    '<input type="password" name="cur" inputmode="numeric" autocomplete="off" required>'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Abrir</button></div>',function(f){
+    deriveKey(f.elements.cur.value,unb64(j.salt),j.iter).then(function(k){return decStr(k,j.data)}).then(function(t){
+      var o=JSON.parse(t);dlg.close();try{applyImport(o.db)}catch(x){toast('Ese archivo no es válido')}
+    }).catch(function(){toast('PIN incorrecto o copia dañada')});
+    return false;
+  });
 }
 $('#fileIn').onchange=function(){
   var file=this.files&&this.files[0];this.value='';if(!file)return;
   file.text().then(function(t){
-    var j=JSON.parse(t),d=j&&j.db;if(!d||!Array.isArray(d.residents))throw 0;
-    var n=d.residents.length;
-    if(!confirm('Se van a cargar '+n+' residentes y '+((d.pautas||[]).length)+' pautas. Esto SUSTITUYE lo que hay ahora en el móvil. ¿Seguir?'))return;
-    var keepSet=db.settings,keepC=db.controls;
-    db=normalize(d);if(!d.settings)db.settings=keepSet;if(!d.controls)db.controls=keepC;
-    save();go('hoy');toast('Datos cargados');
+    var j=JSON.parse(t);
+    if(j&&j.enc){if(!subtle)throw 0;importEnc(j);return}
+    applyImport(j&&j.db);
   }).catch(function(){toast('Ese archivo no es válido')});
 };
 
+/* ---- diálogos de PIN (activar / cambiar / quitar) ---- */
+function pinDlg(kind){
+  var h='<h3>'+({set:'Activar PIN',change:'Cambiar PIN',remove:'Quitar PIN'}[kind])+'</h3>';
+  if(kind==='remove')h+='<div class="note">Al quitar el PIN, los datos dejarán de estar cifrados en este móvil.</div>';
+  if(kind!=='set')h+='<label class="f">PIN actual</label><input type="password" name="cur" inputmode="numeric" autocomplete="off" required>';
+  if(kind!=='remove')h+='<label class="f">'+(kind==='change'?'PIN nuevo':'PIN')+' (mínimo 6; mejor 8 o más, o con letras)</label><input type="password" name="p1" inputmode="numeric" autocomplete="off" required>'+
+    '<label class="f">Repítelo</label><input type="password" name="p2" inputmode="numeric" autocomplete="off" required>'+
+    '<div class="hint"><b>Si olvidas el PIN no hay forma de recuperar los datos del móvil</b>: habría que cargarlos de nuevo desde una copia.</div>';
+  h+='<div class="actions"><button type="button" class="btn ghost" id="kbT">Teclado con letras</button></div>'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn '+(kind==='remove'?'danger':'primary')+'">'+(kind==='remove'?'Quitar PIN':'Guardar')+'</button></div>';
+  openDlg(h,function(f){
+    var cur=f.elements.cur?f.elements.cur.value:'',a=f.elements.p1?f.elements.p1.value:'',b=f.elements.p2?f.elements.p2.value:'';
+    if(kind!=='remove'){var m=pinErr(a,b);if(m){toast(m);return false}}
+    (kind==='set'?Promise.resolve(true):checkPin(cur)).then(function(ok){
+      if(!ok){toast('PIN actual incorrecto');return}
+      if(kind==='remove')return removePinNow().then(function(){dlg.close();render();toast('PIN quitado: los datos ya no están cifrados')});
+      return setPin(a).then(function(){dlg.close();render();toast(kind==='set'?'PIN activado: datos cifrados':'PIN cambiado')});
+    }).catch(function(){toast('No se ha podido completar')});
+    return false;
+  });
+  $('#kbT').onclick=function(){var ins=$$('#df input[type=password]'),num=ins[0].inputMode==='numeric';ins.forEach(function(i){i.inputMode=num?'text':'numeric';i.blur()});this.textContent=num?'Teclado numérico':'Teclado con letras';ins[0].focus()};
+}
+
 /* ================= arranque ================= */
 var lastDay0=today();
-document.addEventListener('visibilitychange',function(){if(!document.hidden){var t=today();if(t!==lastDay0){if(ctx.date===lastDay0)ctx.date=t;lastDay0=t}if(!dlg.open)render()}});
+var hiddenAt=0;
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){hiddenAt=Date.now();return}
+  if(locked)return;
+  if(key&&Date.now()>noLockUntil&&Date.now()-hiddenAt>=lockMin()*60000){lock();return}
+  var t=today();if(t!==lastDay0){if(ctx.date===lastDay0)ctx.date=t;lastDay0=t}if(!dlg.open)render();
+});
 if(navigator.storage&&navigator.storage.persist){try{navigator.storage.persist()}catch(x){}}
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(function(){});
-render();
+boot();
 })();
 </script>
 </body>
