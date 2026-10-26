@@ -1,0 +1,18 @@
+APP "PLANTA" — instalación
+
+IMPORTANTE (privacidad)
+- En GitHub sube SOLO estos 5 archivos: index.html, sw.js, manifest.webmanifest, icon-192.png, icon-512.png.
+  Son la app vacía: no contienen ningún dato de residentes.
+- El archivo planta5-datos-iniciales.json NO se sube a GitHub nunca. Se carga directamente en el móvil.
+
+1. En GitHub crea un repositorio nuevo (por ejemplo "Planta"), público.
+2. Add file > Upload files > sube los 5 archivos (sueltos, sin carpeta) > Commit changes.
+3. Settings > Pages > Deploy from a branch > main > / (root) > Save.
+4. En 1-3 minutos: https://merdman17.github.io/Planta/  (con la mayúscula igual que el repositorio).
+5. Ábrela en el móvil y añádela a la pantalla de inicio.
+6. Descarga en el móvil el archivo planta5-datos-iniciales.json (desde el chat) y en la app:
+   Ajustes > Cargar datos > elige ese archivo.
+7. Pon los nombres: Residentes > toca una cama > Editar > Nombre. Se actualiza en toda la app.
+
+Copias: Ajustes > Hacer copia. La copia SÍ lleva los nombres: guárdala en sitio seguro y no la subas a ningún sitio.
+Actualizar la app: sube el index.html nuevo y en sw.js cambia 'planta-v1' por 'planta-v2' (v3, v4...). Tus datos no se tocan.
