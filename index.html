@@ -110,7 +110,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .actions .btn{flex:1}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
-nav.tabs button{flex:1;max-width:140px;border:0;background:transparent;padding:8px 2px 9px;font-size:11.5px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav.tabs button{flex:1;max-width:120px;border:0;background:transparent;padding:8px 1px 9px;font-size:10.5px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
 nav.tabs button span{font-size:19px;line-height:1}
 nav.tabs button[aria-current=page]{color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%) translateY(16px);bottom:calc(86px + env(safe-area-inset-bottom));background:var(--text);color:var(--bg);padding:10px 15px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:calc(100% - 32px);z-index:20}
@@ -133,6 +133,15 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 .c-siesta{border-left-color:#8a8f3a}.c-agudo{border-left-color:#c2453a}.c-cura{border-left-color:#d0631e}
 .c-glucemia{border-left-color:#b8327a}.c-peg{border-left-color:#3d8f5a}.c-dietoterapico{border-left-color:#6b8a2f}
 .c-dieta{border-left-color:#6b726e}.c-general{border-left-color:#444}
+.c-insulina{border-left-color:#1f9d8a}
+nav.tabs button{position:relative}
+.bdg{position:absolute;top:3px;left:calc(50% + 6px);background:var(--red);color:#fff;border-radius:999px;font-style:normal;font-size:10px;min-width:16px;padding:1px 4px;text-align:center;line-height:13px}
+.ev{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.ev:first-of-type{border-top:0}
+.ev .ck{width:30px;height:30px}
+.ev.pd{opacity:.5}
+.ev.pd .ck{background:var(--green);border-color:var(--green);color:#fff}
+.ev.pd .tx{text-decoration:line-through}
 @media print{
   nav.tabs,.noprint,.top button,.chips,.datebar button{display:none!important}
   body{background:#fff;color:#000;padding:0}
@@ -145,6 +154,7 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 
 <nav class="tabs" id="tabs">
   <button data-v="hoy"><span>☑︎</span>Hoy</button>
+  <button data-v="evo"><span>✎</span>Evolutivo<i class="bdg" id="bdg" hidden></i></button>
   <button data-v="res"><span>🛏︎</span>Residentes</button>
   <button data-v="listas"><span>☰</span>Listas</button>
   <button data-v="ctrl"><span>⏱︎</span>Controles</button>
@@ -197,6 +207,7 @@ var CATS={
   peg:{l:'Nutrición enteral (PEG)',name:'Producto',dose:'Volumen por toma',detail:'Agua / indicaciones',sched:'daily'},
   cronico:{l:'Tratamientos crónicos',name:'Fármaco',dose:'Dosis',detail:'Pauta / vía',sched:'daily',subs:['Inhalador','Jarabe / gotas','Parche','Colirio','Pomada','Otro']},
   periodica:{l:'Otras pautas periódicas',name:'Fármaco',dose:'Dosis',detail:'Vía / indicaciones',sched:'mdays'},
+  insulina:{l:'Insulinas',name:'Insulina',dose:'Dosis / pauta',detail:'Observaciones',sched:'daily'},
   oxigeno:{l:'Oxigenoterapia',name:'Dispositivo',dose:'Flujo',detail:'Pauta',sched:'daily'},
   glucemia:{l:'Perfiles glucémicos',name:'Perfil',dose:null,detail:'Observaciones',sched:'weekdays'},
   cura:{l:'Curas',name:'Localización',dose:'Tipo / estadio',detail:'Procedimiento y material',sched:'everyN'},
@@ -204,8 +215,17 @@ var CATS={
   agudo:{l:'Tratamientos agudos',name:'Fármaco',dose:'Dosis',detail:'Pauta / vía / motivo',sched:'daily'},
   general:{l:'Tareas generales',name:'Tarea',dose:null,detail:'Detalle',sched:'mdays',general:true}
 };
-var CAT_ORDER=['dieta','dietoterapico','peg','cronico','periodica','oxigeno','glucemia','cura','siesta','agudo'];
-function defSettings(){return{title:'Planta 5',shiftStart:'07:30',shiftEnd:'15:00',meals:{DE:'09:00',CO:'13:00',ME:'17:00',CE:'19:30',AC:'21:00'}}}
+var CAT_ORDER=['dieta','dietoterapico','peg','cronico','periodica','insulina','oxigeno','glucemia','cura','siesta','agudo'];
+var BASE_ORDER=CAT_ORDER.slice(),GEN_ORDER=['general'];
+function syncCats(list){
+  Object.keys(CATS).forEach(function(k){if(k.indexOf('x_')===0)delete CATS[k]});
+  CAT_ORDER.length=0;BASE_ORDER.forEach(function(k){CAT_ORDER.push(k)});GEN_ORDER.length=0;GEN_ORDER.push('general');
+  (list||[]).forEach(function(c){
+    CATS[c.id]={l:c.l,name:c.name||'Nombre',dose:c.dose?'Dosis':null,detail:c.detail||'Detalle',sched:'none',general:!!c.general,custom:true};
+    (c.general?GEN_ORDER:CAT_ORDER).push(c.id)});
+}
+function allCats(){return CAT_ORDER.concat(GEN_ORDER)}
+function defSettings(){return{title:'Planta 5',shiftStart:'07:30',shiftEnd:'15:00',meals:{DE:'09:00',CO:'13:00',ME:'17:00',CE:'19:30',AC:'21:00'},hoyCats:{oxigeno:false,siesta:false},selFloors:null}}
 function defControls(){return[
   {id:'mna',name:'MNA completo',months:6,monthsMal:3,shortMal:true,kind:'mna',unit:'Puntuación'},
   {id:'norton',name:'Norton',months:6,kind:'norton',unit:'Puntuación'},
@@ -213,15 +233,19 @@ function defControls(){return[
   {id:'peso',name:'Peso',months:6,monthsMal:3,shortMal:true,unit:'kg'},
   {id:'cv',name:'Constantes (TA, FC, SatO₂)',months:1,unit:'TA / FC / SatO₂'},
   {id:'gluc',name:'Glucemia',months:6,unit:'mg/dl'}]}
-function emptyDB(){return{v:1,settings:defSettings(),controls:defControls(),residents:[],records:[],open:[],pautas:[],done:{}}}
+function emptyDB(){return{v:1,settings:defSettings(),controls:defControls(),residents:[],records:[],open:[],pautas:[],done:{},custom:[],log:[],mig:2}}
 function normalize(d){
   var e=emptyDB();d=d&&typeof d==='object'?d:{};
   ['residents','records','open','pautas'].forEach(function(k){if(!Array.isArray(d[k]))d[k]=[]});
   if(!d.done||typeof d.done!=='object')d.done={};
+  syncCats(Array.isArray(d.custom)?d.custom:(d.custom=[]));
+  if(!Array.isArray(d.log))d.log=[];
   d.settings=Object.assign(e.settings,d.settings||{});d.settings.meals=Object.assign(defSettings().meals,d.settings.meals||{});
+  d.settings.hoyCats=Object.assign({oxigeno:false,siesta:false},d.settings.hoyCats||{});if(!Array.isArray(d.settings.selFloors))d.settings.selFloors=null;
   if(!Array.isArray(d.controls)||!d.controls.length)d.controls=e.controls;
   d.pautas.forEach(function(p){p.sched=p.sched||{type:'none'};p.slots=Array.isArray(p.slots)?p.slots:[];if(!CATS[p.cat])p.cat='agudo'});
   d.residents.forEach(function(r){if(r.active===undefined)r.active=true;r.name=r.name||'';r.info=r.info||''});
+  if(!(d.mig>=2)){d.pautas.forEach(function(p){if(p.cat==='cronico'&&p.sub==='Parche'&&p.sched&&p.sched.type==='daily'&&p.hoy===undefined)p.hoy=false});d.mig=2}
   d.v=1;return d;
 }
 
@@ -243,6 +267,7 @@ function save(){
   if(locked)return;
   var lim=addDays(today(),-120);
   Object.keys(db.done).forEach(function(k){if(k.split('|')[1]<lim)delete db.done[k]});
+  db.log=db.log.filter(function(l){return l.date>=addDays(today(),l.passed?-30:-120)});
   var str=JSON.stringify(db);
   if(!key){try{localStorage.setItem(KEY,str)}catch(x){toast('No se ha podido guardar en este dispositivo')}return}
   var k=key,m=meta;
@@ -432,13 +457,14 @@ function siarNext(){
 }
 
 /* ================= navegación ================= */
-var view='hoy',ctx={date:today(),cat:'cronico',ctrl:'__venc',q:'',showEnded:false,showBajas:false,rid:null,prev:'res'};
+var view='hoy',ctx={evoAll:false,date:today(),cat:'cronico',ctrl:'__venc',q:'',showEnded:false,showBajas:false,rid:null,prev:'res'};
 function go(v,opt){if(opt)Object.assign(ctx,opt);if(v!==view&&v!=='ficha'&&view!=='ficha')ctx.q='';view=v;render();window.scrollTo(0,0)}
 $('#tabs').onclick=function(e){var b=e.target.closest('button');if(b)go(b.dataset.v)};
 function render(){
   $$('#tabs button').forEach(function(b){b.setAttribute('aria-current',(b.dataset.v===view||(view==='ficha'&&b.dataset.v===ctx.prev))?'page':'false')});
-  var h=({hoy:vHoy,res:vRes,listas:vListas,ctrl:vCtrl,ajustes:vAjustes,ficha:vFicha}[view]||vHoy)();
+  var h=({hoy:vHoy,evo:vEvo,res:vRes,listas:vListas,ctrl:vCtrl,ajustes:vAjustes,ficha:vFicha}[view]||vHoy)();
   $('#app').innerHTML=h;
+  var np=db.log.filter(function(l){return !l.passed}).length,bg=$('#bdg');if(bg){bg.hidden=!np;bg.textContent=np>99?'99+':np}
   var c=$('.chip[aria-pressed=true]');if(c)c.scrollIntoView({block:'nearest',inline:'center'});
 }
 
@@ -451,8 +477,11 @@ function vHoy(){
   var sn=siarNext();
   if(sn){var dd=diffDays(t,sn.date);if(dd<=21)h+='<div class="banner">📌 <b>Corte del SIAR</b> '+(dd===0?'<b>hoy</b>':'en <b>'+dd+' días</b>')+' ('+fmt(sn.date)+'). Revisa los controles pendientes.</div>'}
   h+='<div class="datebar"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Día anterior">‹</button><div class="lbl">'+(s===t?'Hoy, '+esc(longDate(s)):esc(longDate(s).charAt(0).toUpperCase()+longDate(s).slice(1)))+'</div>'+(s!==t?'<button class="btn sm" data-act="today">Hoy</button>':'')+'<button class="iconbtn" data-act="day" data-n="1" aria-label="Día siguiente">›</button></div>';
+  var fl=floorsList();
+  if(fl.length>1){var sf=db.settings.selFloors;
+    h+='<div class="chips noprint"><button class="chip" data-act="floor" data-f="" aria-pressed="'+(!sf)+'">Todas las plantas</button>'+fl.map(function(f){return '<button class="chip" data-act="floor" data-f="'+f+'" aria-pressed="'+(!!sf&&sf.indexOf(f)>=0)+'">Planta '+f+'</button>'}).join('')+'</div>'}
   // controles
-  var due=[];activeRes().forEach(function(r){db.controls.forEach(function(c){var st=cstat(r.id,c.id);if(st.st!=='ok'&&(st.st!=='prox'||diffDays(t,st.next)<=7))due.push({r:r,st:st})})});
+  var due=[];activeRes().filter(floorRes).forEach(function(r){db.controls.forEach(function(c){var st=cstat(r.id,c.id);if(st.st!=='ok'&&(st.st!=='prox'||diffDays(t,st.next)<=7))due.push({r:r,st:st})})});
   var nv=due.filter(function(x){return x.st.st!=='prox'}).length,np=due.length-nv;
   if(due.length){
     h+='<details class="noprint"'+(ctx.openDue?' open':'')+' data-act="dueToggle"><summary>Controles: <span class="tag t-venc">'+nv+' vencidos/pendientes</span> <span class="tag t-prox">'+np+' esta semana</span></summary>';
@@ -460,12 +489,13 @@ function vHoy(){
     due.forEach(function(x){h+='<div class="card row" data-act="openR" data-id="'+x.r.id+'"><div class="grow">'+whoHTML(x.r)+'<div class="small">'+esc(x.st.c.name)+'</div></div>'+stTag(x.st)+'</div>'});
     h+='</details>';
   }
-  var ts=tasksFor(s),my=ts.filter(function(x){return x.mine}),ot=ts.filter(function(x){return !x.mine});
+  var all=tasksFor(s).filter(function(x){return floorOK(x.p)}),ts=all.filter(function(x){return hoyOn(x.p)}),hid=all.filter(function(x){return !hoyOn(x.p)}),my=ts.filter(function(x){return x.mine}),ot=ts.filter(function(x){return !x.mine});
   var dn=my.filter(function(x){return db.done[x.key]}).length;
   h+='<h2>Mi turno <span class="muted small">'+esc(db.settings.shiftStart)+'–'+esc(db.settings.shiftEnd)+' · '+dn+'/'+my.length+' hechas</span></h2>';
   if(my.length)h+='<div class="prog"><i style="width:'+Math.round(100*dn/my.length)+'%"></i></div>';
   h+=my.length?my.map(taskHTML).join(''):'<div class="card empty">Nada programado en tu turno.</div>';
   if(ot.length)h+='<details><summary>Otros turnos ('+ot.length+')</summary>'+ot.map(taskHTML).join('')+'</details>';
+  if(hid.length)h+='<details><summary>Ocultas en Hoy ('+hid.length+')</summary>'+hid.map(taskHTML).join('')+'</details>';
   return h;
 }
 function taskHTML(x){
@@ -479,16 +509,16 @@ function taskHTML(x){
 
 /* ================= vista RESIDENTES ================= */
 function vRes(){
-  var h='<div class="top"><h1>Residentes</h1><button class="btn sm primary" data-act="newRes">+ Ingreso</button></div>';
+  var h='<div class="top"><h1>Residentes</h1><button class="btn sm" data-act="newBeds">+ Camas</button><button class="btn sm primary" data-act="newRes">+ Ingreso</button></div>';
   h+='<input type="search" placeholder="Buscar por nombre o habitación" data-in="q" value="'+esc(ctx.q)+'">';
   return h+'<div id="results">'+resResults()+'</div>';
 }
 function resResults(){
   var h='';
   var q=ctx.q.trim().toLowerCase(),list=db.residents.filter(function(r){return (ctx.showBajas?!r.active:r.active)&&(!q||(r.name+' '+r.room).toLowerCase().indexOf(q)>=0)}).sort(function(a,b){return a.room<b.room?-1:1});
-  var mods={};list.forEach(function(r){var m=(r.room.match(/^\d+\.([A-Z])/)||[])[1]||'Otros';(mods[m]=mods[m]||[]).push(r)});
+  var mods={};list.forEach(function(r){var mm=r.room.match(/^(\d+)\.([A-Z])/),m=mm?'Planta '+mm[1]+' · Módulo '+mm[2]:'Otros';(mods[m]=mods[m]||[]).push(r)});
   Object.keys(mods).sort().forEach(function(m){
-    h+='<h2>'+(m.length===1?'Módulo '+m:m)+'</h2><div class="grid">';
+    h+='<h2>'+m+'</h2><div class="grid">';
     mods[m].forEach(function(r){
       var nv=0;if(r.active)db.controls.forEach(function(c){var st=cstat(r.id,c.id).st;if(st==='venc'||st==='pend')nv++});
       h+='<button class="bed" data-act="openR" data-id="'+r.id+'"><span class="rn">'+esc(rname(r))+'</span><span class="rm">'+esc(rsub(r)||' ')+'</span>'+(nv?'<span class="tag t-venc">'+nv+' control'+(nv>1?'es':'')+' pendiente'+(nv>1?'s':'')+'</span>':'')+(r.active?'':'<span class="tag t-sp">Baja '+fmt(r.bajaDate)+'</span>')+'</button>';
@@ -537,9 +567,11 @@ function itemHTML(p){
 
 /* ================= vista LISTAS ================= */
 function vListas(){
-  var cats=CAT_ORDER.concat(['general']);
+  if(!CATS[ctx.cat])ctx.cat='cronico';
+  var cats=allCats();
   var h='<div class="top"><h1>Listas</h1><button class="btn sm" data-act="print">Imprimir</button><button class="btn sm primary" data-act="addP" data-cat="'+ctx.cat+'">+ Añadir</button></div>';
   h+='<div class="chips">'+cats.map(function(k){return '<button class="chip" data-act="cat" data-cat="'+k+'" aria-pressed="'+(ctx.cat===k)+'">'+esc(CATS[k].l)+'</button>'}).join('')+'</div>';
+  h+='<div class="actions noprint" style="margin:0 0 8px"><button class="btn sm" data-act="newCat">+ Nuevo apartado</button>'+(CATS[ctx.cat].custom?'<button class="btn sm" data-act="editCat">Editar este apartado</button>':'')+'</div>';
   h+='<input type="search" placeholder="Buscar (fármaco, habitación, nombre…)" data-in="q" value="'+esc(ctx.q)+'">';
   return h+'<div id="results">'+listResults()+'</div>';
 }
@@ -558,7 +590,7 @@ function listResults(){
   order.forEach(function(k){var r=k==='_'?null:R(k);
     h+='<div class="sect"><div class="hd" data-act="openR" data-id="'+(r?r.id:'')+'"><h3>'+whoHTML(r)+'</h3></div>'+g[k].map(itemHTML).join('')+'</div>'});
   if(!items.length)h+='<div class="card empty">No hay nada en este apartado'+(q?' con esa búsqueda':'')+'.</div>';
-  if(['agudo','cura','glucemia','periodica','general'].indexOf(ctx.cat)>=0)h+='<div class="actions noprint"><button class="btn ghost" data-act="toggleEnded">'+(ctx.showEnded?'Ocultar finalizados':'Mostrar finalizados')+'</button></div>';
+  if(['agudo','cura','glucemia','periodica','insulina','general'].indexOf(ctx.cat)>=0||CATS[ctx.cat].custom)h+='<div class="actions noprint"><button class="btn ghost" data-act="toggleEnded">'+(ctx.showEnded?'Ocultar finalizados':'Mostrar finalizados')+'</button></div>';
   return h;
 }
 
@@ -592,6 +624,7 @@ function vAjustes(){
     '<label class="f">Horas de referencia (para DE, CO, ME, CE y al acostar)</label><div class="two">'+
     Object.keys(MEALS).map(function(k){return '<div><label class="f" style="margin-top:4px">'+MEALS[k]+'</label><input type="time" data-meal="'+k+'" value="'+esc(s.meals[k])+'"></div>'}).join('')+'</div>'+
     '<div class="hint">Lo que cae dentro de tu turno sale en "Mi turno"; el resto, en "Otros turnos".</div></div>';
+  h+='<div class="sect"><div class="hd"><h3>Qué sale en Hoy</h3></div><div class="checks">'+allCats().map(function(k){return '<label><input type="checkbox" data-hoycat="'+k+'"'+(s.hoyCats[k]!==false?' checked':'')+'> '+esc(CATS[k].l)+'</label>'}).join('')+'</div><div class="hint">Lo desmarcado no aparece en Hoy (queda en “Ocultas en Hoy”). Cada pauta puede forzar sí o no desde su edición (por ejemplo, el parche de mórfico).</div></div>';
   h+='<div class="sect"><div class="hd"><h3>Escalas y controles</h3><button class="btn sm ghost" data-act="addCtrl">+ Añadir</button></div>';
   db.controls.forEach(function(c){
     h+='<div class="ctl" data-act="editCtrl" data-c="'+c.id+'" style="cursor:pointer"><div class="nm">'+esc(c.name)+'</div><div class="dt">Cada '+c.months+' meses'+(c.shortMal?' · '+c.monthsMal+' meses si MNA = malnutrición':'')+'</div><div class="act"><span class="btn sm ghost">Editar</span></div></div>';
@@ -637,6 +670,7 @@ function editRes(r){
   function(f){
     var room=v(f,'room').toUpperCase().replace(/\s+/g,''),name=v(f,'name');
     if(!room){toast('Falta la habitación');return false}
+    var nr=normRoom(room);if(nr)room=nr;else if(room!==r.room&&!confirm('«'+room+'» no tiene aspecto de habitación (como 05.A.01.1). ¿Guardar igualmente? Si es un nombre, ponlo en el campo Nombre.'))return false;
     var other=db.residents.find(function(x){return x.active&&x.room===room&&x!==r});
     if(other){
       if(isNew){if(!confirm('La cama '+room+' está ocupada por '+rname(other)+'. ¿Dar de baja al anterior y registrar el ingreso?'))return false;other.active=false;other.bajaDate=today()}
@@ -674,6 +708,7 @@ function regCtrl(rid,cid){
   function(f){
     var d=v(f,'date');if(!isDate(d)){toast('Fecha no válida');return false}
     db.records.push({id:uid('r'),rid:rid,cid:cid,date:d,value:v(f,'value'),result:v(f,'result')});
+    addLog({date:d,rid:rid,cat:'ctrl',text:c.name+(v(f,'value')?' '+v(f,'value'):'')+(v(f,'result')?' ('+v(f,'result')+')':'')});
     db.open=db.open.filter(function(o){return !(o.rid===rid&&o.cid===cid)});
     save();render();var st=cstat(rid,cid);toast('Guardado · próximo '+fmt(st.next));
   });
@@ -712,7 +747,7 @@ function editP(p,cat,rid){
   var mealLabels=p.slots.filter(function(s){return s.m&&!s.g&&s.label}).map(function(s){return s.m+' '+s.label}).join('; ');
   var h='<h3>'+(isNew?'Añadir':'Editar')+' · '+esc(C0.l)+'</h3>';
   if(!C0.general)h+='<label class="f">Residente</label><select name="rid" required><option value="">Elige…</option>'+resOpts+'</select>';
-  h+='<label class="f">Apartado</label><select name="cat">'+CAT_ORDER.concat(['general']).map(function(k){return '<option value="'+k+'"'+(k===p.cat?' selected':'')+'>'+esc(CATS[k].l)+'</option>'}).join('')+'</select>';
+  h+='<label class="f">Apartado</label><select name="cat">'+allCats().map(function(k){return '<option value="'+k+'"'+(k===p.cat?' selected':'')+'>'+esc(CATS[k].l)+'</option>'}).join('')+'</select>';
   if(C0.subs)h+='<label class="f">Tipo</label><select name="sub"><option value=""></option>'+C0.subs.map(function(s){return '<option'+(s===p.sub?' selected':'')+'>'+esc(s)+'</option>'}).join('')+'</select>';
   h+='<label class="f">'+esc(C0.name)+'</label><input type="text" name="name" required value="'+esc(p.name)+'">';
   if(C0.dose)h+='<label class="f">'+esc(C0.dose)+'</label><input type="text" name="dose" value="'+esc(p.dose)+'">';
@@ -723,19 +758,21 @@ function editP(p,cat,rid){
     [['none','Sin agenda (solo consulta)'],['daily','Todos los días'],['weekdays','Días de la semana'],['mdays','Días del mes'],['everyN','Cada X días'],['months','Cada X meses'],['once','Un día concreto']].map(function(o){return '<option value="'+o[0]+'"'+(sc.type===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+
     '<div data-s="weekdays"><label class="f">Días</label><div class="checks">'+WD.map(function(d,i){return '<label><input type="checkbox" name="wd" value="'+(i+1)+'"'+((sc.days||[]).indexOf(i+1)>=0?' checked':'')+'> '+d+'</label>'}).join('')+'</div></div>'+
     '<div data-s="mdays"><label class="f">Días del mes (separados por comas)</label><input type="text" name="mdays" inputmode="numeric" value="'+esc((sc.mdays||[]).join(', '))+'" placeholder="1, 15"></div>'+
-    '<div data-s="n"><label class="f" id="nLbl">Cada</label><input type="number" min="1" max="365" name="n" value="'+(sc.n||1)+'"></div>'+
+    '<div data-s="n"><label class="f" id="nLbl">Cada</label><input type="number" min="1" max="365" name="n" value="'+(sc.n||1)+'"><div class="hint">Ej.: parche de mórfico = cada 3 días, desde el día en que se puso.</div></div>'+
     '<div class="two"><div data-s="start"><label class="f" id="startLbl">Desde</label><input type="date" name="start" value="'+esc(sc.start||'')+'"></div><div data-s="end"><label class="f">Hasta (opcional)</label><input type="date" name="end" value="'+esc(sc.end||'')+'"></div></div>'+
     '<div data-s="slots"><label class="f">Momentos del día</label><div class="checks">'+mealSel+'</div>'+
     (p.cat==='glucemia'?'<label class="f">Puntos del perfil</label><div class="checks">'+gluSel+'</div>':'')+
     '<label class="f">Horas concretas (opcional)</label><input type="text" name="hours" value="'+esc(hours)+'" placeholder="09:00 Cambio; 16:00 Acostar">'+
     '<div class="hint">Separa con “;”. Detrás de la hora puedes poner una etiqueta.</div>'+
     '<label class="f">Etiquetas por momento (opcional)</label><input type="text" name="mlabels" value="'+esc(mealLabels)+'" placeholder="DE 12 gotas; CO 5 gotas"></div>';
+  h+='<label class="f">Mostrar en Hoy</label><select name="hoy">'+[['','Según el apartado ('+(db.settings.hoyCats[p.cat]===false?'oculto':'visible')+')'],['1','Sí, mostrar siempre'],['0','No mostrar']].map(function(o){var cur=p.hoy===true?'1':p.hoy===false?'0':'';return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>';
+  h+='<label class="f">Texto para el evolutivo (opcional)</label><input type="text" name="evo" value="'+esc(p.evo||'')+'" placeholder="Ej.: Deltius 25.000 UI vía oral">';
   h+='<label class="f">Notas</label><textarea name="notes">'+esc(p.notes==='siar'?'':p.notes)+'</textarea>';
   h+='<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>';
   if(!isNew)h+='<div class="actions"><button type="button" class="btn" id="dupP">Duplicar</button><button type="button" class="btn danger" id="delP">Eliminar</button></div>';
   openDlg(h,function(f){
     var cat=v(f,'cat');
-    var np={cat:cat,sub:f.elements.sub?v(f,'sub'):p.sub,name:v(f,'name'),dose:f.elements.dose?v(f,'dose'):'',detail:v(f,'detail'),sp:f.elements.sp.checked,notes:p.notes==='siar'&&!v(f,'notes')?'siar':v(f,'notes')};
+    var np={cat:cat,sub:f.elements.sub?v(f,'sub'):p.sub,name:v(f,'name'),dose:f.elements.dose?v(f,'dose'):'',detail:v(f,'detail'),sp:f.elements.sp.checked,notes:p.notes==='siar'&&!v(f,'notes')?'siar':v(f,'notes'),evo:v(f,'evo'),hoy:v(f,'hoy')===''?undefined:v(f,'hoy')==='1'};
     if(!CATS[cat].general){np.rid=v(f,'rid');if(!np.rid){toast('Elige el residente');return false}}else np.rid=null;
     var t=v(f,'stype'),s={type:t};
     if(t==='weekdays')s.days=$$('[name=wd]:checked',f).map(function(x){return +x.value});
@@ -773,6 +810,109 @@ function editP(p,cat,rid){
   var du=$('#dupP');if(du)du.onclick=function(){var c=JSON.parse(JSON.stringify(p));c.id=uid('p');if(c.notes==='siar')c.notes='';db.pautas.push(c);save();dlg.close();render();editP(c);toast('Copia creada: cambia lo que necesites')};
 }
 
+/* ================= plantas, Hoy, evolutivo ================= */
+function floorOf(r){return (String(r.room).match(/^(\d+)[.\-]/)||[])[1]||''}
+function floorsList(){var o={};db.residents.forEach(function(r){if(r.active){var f=floorOf(r);if(f)o[f]=1}});return Object.keys(o).sort()}
+function floorRes(r){var s=db.settings.selFloors;return !s||!s.length||s.indexOf(floorOf(r))>=0}
+function floorOK(p){if(!p.rid)return true;var r=R(p.rid);return !!r&&floorRes(r)}
+function hoyOn(p){if(p.hoy===true)return true;if(p.hoy===false)return false;return db.settings.hoyCats[p.cat]!==false}
+function normRoom(s){var m=s.match(/^(\d{1,2})[.\-]?([A-Z])[.\-]?(\d{1,2})[.\-]?(\d)$/);return m?pad(+m[1])+'.'+m[2]+'.'+pad(+m[3])+'.'+m[4]:''}
+function addLog(o){var n=new Date();o.id=uid('l');o.time=pad(n.getHours())+':'+pad(n.getMinutes());o.passed=false;db.log.push(o)}
+function logUndo(k){db.log=db.log.filter(function(l){return l.key!==k})}
+function logDone(k){
+  var a=k.split('|'),p=db.pautas.find(function(x){return x.id===a[0]});if(!p||db.log.some(function(l){return l.key===k}))return;
+  var sl=p.slots&&p.slots[+a[2]],st=sl?slotText(sl):'';
+  var txt=p.evo||((p.cat==='cura'?'Cura ':'')+(p.cat==='cronico'&&p.sub?p.sub+' ':'')+p.name+(p.dose?' '+p.dose:''));
+  addLog({key:k,date:a[1],rid:p.rid,cat:p.cat,text:txt+(st?' ('+st+')':'')});
+}
+function evoGroups(list){
+  var byD={};list.forEach(function(l){(byD[l.date]=byD[l.date]||[]).push(l)});
+  return Object.keys(byD).sort().reverse().map(function(d){
+    var byR={},order=[];byD[d].sort(function(a,b){return a.time<b.time?-1:a.time>b.time?1:0}).forEach(function(l){var k=l.rid||'_';if(!byR[k]){byR[k]=[];order.push(k)}byR[k].push(l)});
+    order.sort(function(a,b){var ra=a==='_'?'~':(R(a)||{room:'~'}).room,rb=b==='_'?'~':(R(b)||{room:'~'}).room;return ra<rb?-1:ra>rb?1:0});
+    return{date:d,res:order.map(function(k){return{rid:k==='_'?null:k,items:byR[k]}})}});
+}
+function vEvo(){
+  var pend=db.log.filter(function(l){return !l.passed}),h='<div class="top"><h1>Evolutivo</h1><button class="btn sm primary" data-act="evoNote">+ Nota</button></div>';
+  h+='<div class="note">Aquí se apunta solo lo que marcas como hecho en Hoy y los controles que registras. Pásalo al ordenador (cuidados, lesiones, evolutivos) y márcalo como pasado.</div>';
+  h+='<div class="actions noprint" style="margin-top:0"><button class="btn primary" data-act="evoCopy">Copiar pendientes ('+pend.length+')</button><button class="btn" data-act="evoAll">Todo pasado</button></div>';
+  var list=db.log.filter(function(l){return ctx.evoAll||!l.passed}),g=evoGroups(list);
+  g.forEach(function(d){
+    h+='<h2>'+esc(longDate(d.date).charAt(0).toUpperCase()+longDate(d.date).slice(1))+'</h2>';
+    d.res.forEach(function(x){var r=x.rid?R(x.rid):null;
+      h+='<div class="sect"><div class="hd"><h3>'+whoHTML(r)+'</h3></div>'+x.items.map(function(l){
+        return '<div class="ev'+(l.passed?' pd':'')+'" data-id="'+l.id+'"><button class="ck" data-act="evoPass" aria-label="Pasado">✓</button><div class="grow tx">'+esc(l.text)+'<div class="small muted">'+esc(l.time)+(l.manual?' · nota':'')+'</div></div><button class="btn sm ghost" data-act="evoDel" aria-label="Borrar">✕</button></div>'}).join('')+'</div>'});
+  });
+  if(!g.length)h+='<div class="card empty">'+(ctx.evoAll?'Todavía no hay nada.':'Nada pendiente de pasar 👍')+'</div>';
+  h+='<div class="actions noprint"><button class="btn ghost" data-act="evoShow">'+(ctx.evoAll?'Ocultar los ya pasados':'Ver también los ya pasados')+'</button></div>';
+  return h;
+}
+function evoText(){
+  var out=[];
+  evoGroups(db.log.filter(function(l){return !l.passed})).forEach(function(d){
+    out.push(fmt(d.date));
+    d.res.forEach(function(x){var r=x.rid?R(x.rid):null;out.push((r?rname(r)+(rsub(r)?' ('+rsub(r)+')':''):'Planta')+': '+x.items.map(function(i){return i.text}).join('; '))});
+    out.push('')});
+  return out.join('\n').trim();
+}
+function evoCopy(){
+  var t=evoText();if(!t){toast('No hay nada pendiente');return}
+  openDlg('<h3>Para pasar al ordenador</h3><textarea name="t" readonly style="min-height:220px">'+esc(t)+'</textarea>'+
+    '<div class="actions"><button type="button" class="btn primary" id="cpy">Copiar</button><button type="button" class="btn" id="cpyp">Copiar y marcar pasado</button></div>'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cerrar</button></div>',function(){return true});
+  var f=$('#df');
+  function cp(){var ta=f.elements.t,ok=false;ta.focus();ta.select();try{ok=document.execCommand('copy')}catch(x){}
+    if(!ok&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('Copiado')},function(){toast('Selecciona el texto y cópialo')})}
+    else toast(ok?'Copiado':'Selecciona el texto y cópialo')}
+  $('#cpy').onclick=cp;
+  $('#cpyp').onclick=function(){cp();db.log.forEach(function(l){l.passed=true});save();dlg.close();render()};
+}
+function evoNote(){
+  openDlg('<h3>Nota para el evolutivo</h3><label class="f">Residente (opcional)</label><select name="rid"><option value="">Planta / general</option>'+activeRes().map(function(r){return '<option value="'+r.id+'">'+esc(r.room+(r.name?' · '+r.name:''))+'</option>'}).join('')+'</select>'+
+    '<label class="f">Qué ha pasado</label><textarea name="t" required></textarea><label class="f">Fecha</label><input type="date" name="date" value="'+today()+'" required>'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>',function(f){
+    var d=v(f,'date'),t=v(f,'t');if(!isDate(d)||!t){toast('Revisa los datos');return false}
+    addLog({date:d,rid:v(f,'rid')||null,cat:'nota',text:t,manual:true});save();render();toast('Apuntado');
+  });
+}
+function catDlg(k){
+  var c=k?db.custom.find(function(x){return x.id===k}):null,isNew=!c;
+  c=c||{id:uid('x_'),l:'',general:false,dose:false,name:'Nombre',detail:'Detalle'};
+  openDlg('<h3>'+(isNew?'Nuevo apartado':'Editar apartado')+'</h3>'+
+    '<label class="f">Nombre del apartado</label><input type="text" name="l" required value="'+esc(c.l)+'" placeholder="Ej.: Heparinas, Sondajes, Vacunas…">'+
+    '<label class="f">Es de…</label><select name="g"'+(isNew?'':' disabled')+'><option value="0">Cada residente (sale en su ficha)</option><option value="1"'+(c.general?' selected':'')+'>Toda la planta (como tareas generales)</option></select>'+
+    '<label class="f">Cómo se llama el primer campo</label><input type="text" name="name" value="'+esc(c.name)+'">'+
+    '<div class="checks" style="margin-top:12px"><label><input type="checkbox" name="dose"'+(c.dose?' checked':'')+'> Incluir campo de dosis</label></div>'+
+    '<label class="f">Cómo se llama el campo de detalle</label><input type="text" name="detail" value="'+esc(c.detail)+'">'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>'+
+    (isNew?'':'<div class="actions"><button type="button" class="btn danger" id="delCat">Eliminar apartado y sus pautas</button></div>'),function(f){
+    c.l=v(f,'l');c.name=v(f,'name')||'Nombre';c.detail=v(f,'detail')||'Detalle';c.dose=f.elements.dose.checked;
+    if(isNew){c.general=v(f,'g')==='1';db.custom.push(c)}
+    syncCats(db.custom);ctx.cat=c.id;save();render();toast('Guardado');
+  });
+  var d=$('#delCat');if(d)d.onclick=function(){
+    var n=db.pautas.filter(function(p){return p.cat===c.id}).length;
+    if(!confirm('¿Eliminar el apartado «'+c.l+'» y sus '+n+' pautas? No se puede deshacer.'))return;
+    db.pautas=db.pautas.filter(function(p){return p.cat!==c.id});db.custom=db.custom.filter(function(x){return x!==c});
+    syncCats(db.custom);ctx.cat='cronico';save();dlg.close();render()};
+}
+function bulkBeds(){
+  openDlg('<h3>Añadir camas por bloque</h3><div class="two"><div><label class="f">Planta</label><input type="text" name="fl" value="04" inputmode="numeric"></div><div><label class="f">Módulo (letra)</label><input type="text" name="mod" value="A" maxlength="1"></div></div>'+
+    '<div class="two"><div><label class="f">Habitación desde</label><input type="number" name="a" min="1" max="99" value="1"></div><div><label class="f">hasta</label><input type="number" name="b" min="1" max="99" value="20"></div></div>'+
+    '<label class="f">Camas por habitación</label><select name="nb"><option>1</option><option selected>2</option></select>'+
+    '<div class="hint">Crea camas vacías (p. ej. 04.A.01.1, 04.A.01.2…). Las que ya existen no se duplican. Los nombres los pones después, en cada cama.</div>'+
+    '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Crear</button></div>',function(f){
+    var fl=v(f,'fl').replace(/\D/g,''),md=v(f,'mod').toUpperCase(),a=+v(f,'a'),b=+v(f,'b'),nb=+v(f,'nb');
+    if(!fl||!/^[A-Z]$/.test(md)||!(a>=1)||!(b>=a)){toast('Revisa planta, letra y rango');return false}
+    var n=0;
+    for(var h=a;h<=b;h++)for(var c=1;c<=nb;c++){
+      var room=pad(+fl)+'.'+md+'.'+pad(h)+'.'+c;
+      if(db.residents.some(function(r){return r.active&&r.room===room}))continue;
+      db.residents.push({id:uid('res'),room:room,name:'',info:'',active:true});n++}
+    save();render();toast(n+' camas creadas');
+  });
+}
+
 /* ================= eventos ================= */
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;
@@ -780,7 +920,7 @@ document.addEventListener('click',function(e){
   switch(a){
     case 'day':ctx.date=addDays(ctx.date,+el.dataset.n);render();break;
     case 'today':ctx.date=today();render();break;
-    case 'done':{var t=el.closest('[data-key]'),k=t.dataset.key;if(db.done[k])delete db.done[k];else db.done[k]=1;save();render();break}
+    case 'done':{var t=el.closest('[data-key]'),k=t.dataset.key;if(db.done[k]){delete db.done[k];logUndo(k)}else{db.done[k]=1;logDone(k)}save();render();break}
     case 'openR':if(el.dataset.id){ctx.prev=view==='ficha'?ctx.prev:view;ctx.rid=el.dataset.id;go('ficha')}break;
     case 'back':go(ctx.prev||'res');break;
     case 'newRes':editRes(null);break;
@@ -803,6 +943,16 @@ document.addEventListener('click',function(e){
     case 'changePin':pinDlg('change');break;
     case 'removePin':pinDlg('remove');break;
     case 'export':exportData();break;
+    case 'floor':{var f=el.dataset.f,sf=db.settings.selFloors;if(!f)sf=null;else{sf=(sf||[]).slice();var ix=sf.indexOf(f);if(ix>=0)sf.splice(ix,1);else sf.push(f);if(!sf.length)sf=null}db.settings.selFloors=sf;save();render();break}
+    case 'evoNote':evoNote();break;
+    case 'evoCopy':evoCopy();break;
+    case 'evoShow':ctx.evoAll=!ctx.evoAll;render();break;
+    case 'evoAll':if(confirm('¿Marcar todo lo pendiente como pasado?')){db.log.forEach(function(l){l.passed=true});save();render()}break;
+    case 'evoPass':{var lg=db.log.find(function(l){return l.id===el.closest('[data-id]').dataset.id});if(lg){lg.passed=!lg.passed;save();render()}break}
+    case 'evoDel':{var id=el.closest('[data-id]').dataset.id;if(confirm('¿Quitar esta línea del evolutivo?')){db.log=db.log.filter(function(l){return l.id!==id});save();render()}break}
+    case 'newCat':catDlg(null);break;
+    case 'editCat':catDlg(ctx.cat);break;
+    case 'newBeds':bulkBeds();break;
     case 'wipe':if(confirm('¿Borrar TODOS los datos de este dispositivo? Haz antes una copia si la necesitas.')&&confirm('Seguro. No se puede deshacer.')){db=normalize(null);save();render();toast('Todo borrado')}break;
   }
 });
@@ -814,6 +964,7 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var el=e.target;
   if(el.dataset.lock!==undefined){try{localStorage.setItem(LOCKMIN,el.value)}catch(x){}toast('Guardado')}
+  if(el.dataset.hoycat){db.settings.hoyCats[el.dataset.hoycat]=el.checked;save();toast('Guardado')}
   if(el.dataset.set){db.settings[el.dataset.set]=el.value;save();toast('Guardado')}
   if(el.dataset.meal){if(el.value){db.settings.meals[el.dataset.meal]=el.value;save();toast('Guardado')}}
 });

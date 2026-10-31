@@ -16,7 +16,7 @@ PRIMERA INSTALACIÓN
 ACTUALIZAR UNA APP YA INSTALADA (con tus datos y tu PIN)
 1. En el repositorio sube los archivos nuevos (index.html y sw.js) y confirma: se reemplazan los anteriores.
 2. Cierra la app del todo y ábrela dos veces: la primera descarga la versión nueva y la segunda la usa.
-3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v2' -> 'planta-v3').
+3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v3' -> 'planta-v4', y así en cada versión).
 
 PIN Y CIFRADO
 - Con PIN, los datos se guardan cifrados (AES-256) en el móvil. Sin el PIN no se pueden leer.
@@ -26,3 +26,18 @@ PIN Y CIFRADO
 - Sin PIN, la copia lleva los nombres en claro: guárdala en sitio seguro y no la subas a ningún sitio.
 - Recomendado: PIN de 8 o más cifras, o con letras (botón "Usar letras y números").
 - Bloqueo automático: Ajustes > Seguridad.
+
+NOVEDADES DE LA VERSIÓN 3
+- Hoy más limpio: oxigenoterapia, siestas y parches diarios ya no salen. Lo oculto queda en "Ocultas en Hoy" (abajo).
+  Ajustes > "Qué sale en Hoy" decide qué apartados salen; cada pauta puede forzar Sí/No ("Mostrar en Hoy").
+- Parche de mórfico cada 3 días: Listas > Otras pautas periódicas (o Crónicos) > + Añadir > "Cada X días" = 3,
+  "Desde" = día en que se puso, "Mostrar en Hoy" = Sí. Sale solo los días que toca.
+- Insulinas: apartado nuevo en Listas y en la ficha de cada residente.
+- Apartados propios: Listas > "+ Nuevo apartado" (por residente o de toda la planta). Se editan y borran desde ahí. No hace falta actualizar la app.
+- Varias plantas: Residentes > "+ Camas" crea camas vacías por bloque (p. ej. planta 04). En Hoy aparecen botones
+  "Planta 05 / 04…" para elegir qué plantas llevas ese día.
+- Evolutivo (pestaña nueva): lo que marcas como hecho y los controles que registras se apuntan solos, con hora.
+  "Copiar pendientes" te da el texto por residente para pasarlo al ordenador; luego "Copiar y marcar pasado".
+  Puedes añadir notas sueltas. En cada pauta, "Texto para el evolutivo" permite fijar cómo se escribe.
+- La habitación se normaliza sola (5a1-1 -> 05.A.01.1) y avisa si lo escrito no parece una habitación.
+ANTES DE ACTUALIZAR: haz una copia (Ajustes > Hacer copia).
