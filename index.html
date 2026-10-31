@@ -474,6 +474,7 @@ function render(){
 function vHoy(){
   var s=ctx.date,t=today(),h='';
   h+='<div class="top"><h1>'+esc(db.settings.title)+'</h1>'+(key?'<button class="iconbtn" data-act="lockNow" aria-label="Bloquear la app">🔒</button>':'')+'</div>';
+  if(updReady)h+=updBanner();
   if(subtle&&!key)h+='<div class="banner">🔓 La app no tiene PIN: los datos están sin cifrar en este móvil. <button class="btn sm primary" data-act="setPin" style="margin-left:6px">Activar PIN</button></div>';
   if(!db.residents.length)h+='<div class="banner">Aún no hay residentes. Ve a <b>Ajustes → Cargar datos</b> para importar el archivo de la planta, o añádelos en <b>Residentes</b>.</div>';
   var sn=siarNext();
@@ -619,7 +620,7 @@ function vCtrl(){
 
 /* ================= vista AJUSTES ================= */
 function vAjustes(){
-  var s=db.settings,h='<div class="top"><h1>Ajustes</h1></div>';
+  var s=db.settings,h='<div class="top"><h1>Ajustes</h1></div>'+(updReady?updBanner():'');
   h+='<div class="note">🔒 Todo se guarda solo en este dispositivo. La app tiene bloqueada cualquier conexión a internet: nada sale de aquí salvo que tú exportes una copia. Los nombres que escribas solo existen en este móvil.</div>';
   h+='<div class="sect"><div class="hd"><h3>General</h3></div><label class="f">Título</label><input type="text" data-set="title" value="'+esc(s.title)+'">'+
     '<div class="two"><div><label class="f">Inicio de mi turno</label><input type="time" data-set="shiftStart" value="'+esc(s.shiftStart)+'"></div><div><label class="f">Fin de mi turno</label><input type="time" data-set="shiftEnd" value="'+esc(s.shiftEnd)+'"></div></div>'+
@@ -645,7 +646,7 @@ function vAjustes(){
     '<div class="actions" style="margin-top:4px"><button class="btn primary" data-act="import">Cargar datos (.json)</button><button class="btn" data-act="export">Hacer copia</button></div>'+
     '<div class="hint">“Cargar datos” sirve para el archivo inicial de la planta y para restaurar una copia. Sustituye todo lo que haya en el móvil. Con PIN activado, las copias se cifran con ese mismo PIN.</div>'+
     '<div class="actions"><button class="btn danger" data-act="wipe">Borrar todo</button></div>'+
-    '<div class="hint">'+db.residents.filter(function(r){return r.active}).length+' residentes activos · '+db.pautas.length+' pautas · '+db.records.length+' registros de controles.</div></div>';
+    '<div class="hint">'+db.residents.filter(function(r){return r.active}).length+' residentes activos · '+db.pautas.length+' pautas · '+db.records.length+' registros de controles.</div><div class="hint">Versión de la app: 3.4</div></div>';
   return h;
 }
 
@@ -748,7 +749,7 @@ function editP(p,cat,rid){
   var hours=p.slots.filter(function(s){return !s.m}).map(function(s){return s.t+(s.label?' '+s.label:'')}).join('; ');
   var mealLabels=p.slots.filter(function(s){return s.m&&!s.g&&s.label}).map(function(s){return s.m+' '+s.label}).join('; ');
   var h='<h3>'+(isNew?'Añadir':'Editar')+' · '+esc(C0.l)+'</h3>';
-  if(!C0.general)h+='<label class="f">Residente</label><select name="rid" required><option value="">Elige…</option>'+resOpts+'</select>';
+  h+='<div id="ridBox"'+(C0.general?' hidden':'')+'><label class="f">Residente</label><select name="rid"'+(C0.general?'':' required')+'><option value="">Elige…</option>'+resOpts+'</select></div>';
   h+='<label class="f">Apartado</label><select name="cat">'+allCats().map(function(k){return '<option value="'+k+'"'+(k===p.cat?' selected':'')+'>'+esc(CATS[k].l)+'</option>'}).join('')+'</select>';
   if(C0.subs)h+='<label class="f">Tipo</label><select name="sub"><option value=""></option>'+C0.subs.map(function(s){return '<option'+(s===p.sub?' selected':'')+'>'+esc(s)+'</option>'}).join('')+'</select>';
   h+='<label class="f">'+esc(C0.name)+'</label><input type="text" name="name" required value="'+esc(p.name)+'">';
@@ -807,7 +808,7 @@ function editP(p,cat,rid){
     $('#startLbl').textContent=t==='once'?'Día':t==='months'?'Próxima fecha / referencia':t==='everyN'?'Desde (primer día)':'Desde';
   }
   f.elements.stype.onchange=sync;sync();
-  f.elements.cat.onchange=function(){if(!!CATS[this.value].general!==!!CATS[p.cat].general){toast('Para mover a/desde tareas generales, crea una nueva');this.value=p.cat}};
+  f.elements.cat.onchange=function(){var g=!!CATS[this.value].general;$('#ridBox').hidden=g;f.elements.rid.required=!g;if(!g&&!f.elements.rid.value)toast('Elige el residente al que pertenece')};
   var d=$('#delP');if(d)d.onclick=function(){if(!confirm('¿Eliminar "'+p.name+'"?'))return;db.pautas=db.pautas.filter(function(x){return x!==p});save();dlg.close();render();toast('Eliminado')};
   var du=$('#dupP');if(du)du.onclick=function(){var c=JSON.parse(JSON.stringify(p));c.id=uid('p');if(c.notes==='siar')c.notes='';db.pautas.push(c);save();dlg.close();render();editP(c);toast('Copia creada: cambia lo que necesites')};
 }
@@ -834,6 +835,7 @@ function evoGroups(list){
     order.sort(function(a,b){var ra=a==='_'?'~':(R(a)||{room:'~'}).room,rb=b==='_'?'~':(R(b)||{room:'~'}).room;return ra<rb?-1:ra>rb?1:0});
     return{date:d,res:order.map(function(k){return{rid:k==='_'?null:k,items:byR[k]}})}});
 }
+function updBanner(){return '<div class="banner">🔄 Hay una versión nueva de la app. <button class="btn sm primary" data-act="reloadApp" style="margin-left:6px">Actualizar</button></div>'}
 function vEvo(){
   var pend=db.log.filter(function(l){return !l.passed}),h='<div class="top"><h1>Evolutivo</h1><button class="btn sm primary" data-act="evoNote">+ Nota</button></div>';
   h+='<div class="note">Aquí se apunta solo lo que marcas como hecho en Hoy y los controles que registras. Pásalo al ordenador (cuidados, lesiones, evolutivos) y márcalo como pasado.</div>';
@@ -968,6 +970,7 @@ document.addEventListener('click',function(e){
     case 'newCat':catDlg(null);break;
     case 'editCat':catDlg(ctx.cat);break;
     case 'newBeds':bulkBeds();break;
+    case 'reloadApp':location.reload();break;
     case 'wipe':if(confirm('¿Borrar TODOS los datos de este dispositivo? Haz antes una copia si la necesitas.')&&confirm('Seguro. No se puede deshacer.')){db=normalize(null);save();render();toast('Todo borrado')}break;
   }
 });
@@ -1055,7 +1058,7 @@ function pinDlg(kind){
 }
 
 /* ================= arranque ================= */
-var lastDay0=today();
+var lastDay0=today(),updReady=false;
 var hiddenAt=0;
 document.addEventListener('visibilitychange',function(){
   if(document.hidden){hiddenAt=Date.now();return}
@@ -1064,7 +1067,13 @@ document.addEventListener('visibilitychange',function(){
   var t=today();if(t!==lastDay0){if(ctx.date===lastDay0)ctx.date=t;lastDay0=t}if(!dlg.open)render();
 });
 if(navigator.storage&&navigator.storage.persist){try{navigator.storage.persist()}catch(x){}}
-if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(function(){});
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  var hadCtl=!!navigator.serviceWorker.controller;
+  var swUpd=function(r){if(r)r.update().catch(function(){})};
+  navigator.serviceWorker.register('sw.js').then(swUpd).catch(function(){});
+  navigator.serviceWorker.addEventListener('controllerchange',function(){if(!hadCtl){hadCtl=true;return}updReady=true;if(!locked&&!dlg.open)render()});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)navigator.serviceWorker.getRegistration().then(swUpd).catch(function(){})});
+}
 boot();
 })();
 </script>

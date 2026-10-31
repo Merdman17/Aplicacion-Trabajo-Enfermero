@@ -14,9 +14,13 @@ PRIMERA INSTALACIÓN
 6. Residentes > toca una cama > Editar > Nombre.
 
 ACTUALIZAR UNA APP YA INSTALADA (con tus datos y tu PIN)
-1. En el repositorio sube los archivos nuevos (index.html y sw.js) y confirma: se reemplazan los anteriores.
-2. Cierra la app del todo y ábrela dos veces: la primera descarga la versión nueva y la segunda la usa.
-3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v5' -> 'planta-v6', y así en cada versión).
+1. Haz una copia (Ajustes > Hacer copia).
+2. En el repositorio sube los archivos nuevos (index.html y sw.js) y confirma: se reemplazan los anteriores.
+3. Espera 2 minutos a que GitHub lo publique (Settings > Pages lo indica, o la pestaña Actions en verde).
+4. Abre la app. Desde la versión 3.4 sale el aviso "Hay una versión nueva" con el botón Actualizar.
+   (Si no sale: cierra la app del todo desde recientes y ábrela otra vez.)
+5. Comprueba en Ajustes, al final, "Versión de la app": debe poner el número nuevo.
+6. Tus datos y tu PIN no se tocan. En cada versión nueva, en sw.js sube el número ('planta-v7' -> 'planta-v8').
 
 PIN Y CIFRADO
 - Con PIN, los datos se guardan cifrados (AES-256) en el móvil. Sin el PIN no se pueden leer.
