@@ -16,7 +16,7 @@ PRIMERA INSTALACIÓN
 ACTUALIZAR UNA APP YA INSTALADA (con tus datos y tu PIN)
 1. En el repositorio sube los archivos nuevos (index.html y sw.js) y confirma: se reemplazan los anteriores.
 2. Cierra la app del todo y ábrela dos veces: la primera descarga la versión nueva y la segunda la usa.
-3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v4' -> 'planta-v5', y así en cada versión).
+3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v5' -> 'planta-v6', y así en cada versión).
 
 PIN Y CIFRADO
 - Con PIN, los datos se guardan cifrados (AES-256) en el móvil. Sin el PIN no se pueden leer.

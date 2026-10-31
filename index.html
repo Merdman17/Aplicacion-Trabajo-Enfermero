@@ -807,7 +807,7 @@ function editP(p,cat,rid){
     $('#startLbl').textContent=t==='once'?'Día':t==='months'?'Próxima fecha / referencia':t==='everyN'?'Desde (primer día)':'Desde';
   }
   f.elements.stype.onchange=sync;sync();
-  f.elements.cat.onchange=function(){if(CATS[this.value].general!==CATS[p.cat].general){toast('Para mover a/desde tareas generales, crea una nueva');this.value=p.cat}};
+  f.elements.cat.onchange=function(){if(!!CATS[this.value].general!==!!CATS[p.cat].general){toast('Para mover a/desde tareas generales, crea una nueva');this.value=p.cat}};
   var d=$('#delP');if(d)d.onclick=function(){if(!confirm('¿Eliminar "'+p.name+'"?'))return;db.pautas=db.pautas.filter(function(x){return x!==p});save();dlg.close();render();toast('Eliminado')};
   var du=$('#dupP');if(du)du.onclick=function(){var c=JSON.parse(JSON.stringify(p));c.id=uid('p');if(c.notes==='siar')c.notes='';db.pautas.push(c);save();dlg.close();render();editP(c);toast('Copia creada: cambia lo que necesites')};
 }
