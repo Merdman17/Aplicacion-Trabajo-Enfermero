@@ -16,7 +16,7 @@ PRIMERA INSTALACIÓN
 ACTUALIZAR UNA APP YA INSTALADA (con tus datos y tu PIN)
 1. En el repositorio sube los archivos nuevos (index.html y sw.js) y confirma: se reemplazan los anteriores.
 2. Cierra la app del todo y ábrela dos veces: la primera descarga la versión nueva y la segunda la usa.
-3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v3' -> 'planta-v4', y así en cada versión).
+3. Tus datos y tu PIN no se tocan. Si cambias algo más adelante, en sw.js sube el número ('planta-v4' -> 'planta-v5', y así en cada versión).
 
 PIN Y CIFRADO
 - Con PIN, los datos se guardan cifrados (AES-256) en el móvil. Sin el PIN no se pueden leer.
@@ -28,7 +28,7 @@ PIN Y CIFRADO
 - Bloqueo automático: Ajustes > Seguridad.
 
 NOVEDADES DE LA VERSIÓN 3
-- Hoy más limpio: oxigenoterapia, siestas y parches diarios ya no salen. Lo oculto queda en "Ocultas en Hoy" (abajo).
+- Hoy más limpio: crónicos (inhaladores, colirios…), PEG, oxigenoterapia y siestas ya no salen; sí curas, controles, inyectables (Deltius, Prolia, hidroferol), insulinas y glucemias. Lo oculto queda en "Ocultas en Hoy" (abajo).
   Ajustes > "Qué sale en Hoy" decide qué apartados salen; cada pauta puede forzar Sí/No ("Mostrar en Hoy").
 - Parche de mórfico cada 3 días: Listas > Otras pautas periódicas (o Crónicos) > + Añadir > "Cada X días" = 3,
   "Desde" = día en que se puso, "Mostrar en Hoy" = Sí. Sale solo los días que toca.
@@ -41,3 +41,5 @@ NOVEDADES DE LA VERSIÓN 3
   Puedes añadir notas sueltas. En cada pauta, "Texto para el evolutivo" permite fijar cómo se escribe.
 - La habitación se normaliza sola (5a1-1 -> 05.A.01.1) y avisa si lo escrito no parece una habitación.
 ANTES DE ACTUALIZAR: haz una copia (Ajustes > Hacer copia).
+- Todos los apartados se pueden renombrar: Listas > elige el apartado > "Editar este apartado" (y "Volver a los nombres originales").
+  Para mover una pauta de un apartado a otro: ábrela y cambia el campo "Apartado".

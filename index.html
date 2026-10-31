@@ -216,16 +216,17 @@ var CATS={
   general:{l:'Tareas generales',name:'Tarea',dose:null,detail:'Detalle',sched:'mdays',general:true}
 };
 var CAT_ORDER=['dieta','dietoterapico','peg','cronico','periodica','insulina','oxigeno','glucemia','cura','siesta','agudo'];
-var BASE_ORDER=CAT_ORDER.slice(),GEN_ORDER=['general'];
-function syncCats(list){
+var BASE_ORDER=CAT_ORDER.slice(),GEN_ORDER=['general'],CATS0=JSON.parse(JSON.stringify(CATS));
+function syncCats(list,over){
   Object.keys(CATS).forEach(function(k){if(k.indexOf('x_')===0)delete CATS[k]});
+  Object.keys(CATS0).forEach(function(k){CATS[k]=Object.assign({},CATS0[k]);var o=over&&over[k];if(o){if(o.l)CATS[k].l=o.l;if(o.name)CATS[k].name=o.name;if(o.detail)CATS[k].detail=o.detail;if(o.dose!==undefined)CATS[k].dose=o.dose||null}});
   CAT_ORDER.length=0;BASE_ORDER.forEach(function(k){CAT_ORDER.push(k)});GEN_ORDER.length=0;GEN_ORDER.push('general');
   (list||[]).forEach(function(c){
     CATS[c.id]={l:c.l,name:c.name||'Nombre',dose:c.dose?'Dosis':null,detail:c.detail||'Detalle',sched:'none',general:!!c.general,custom:true};
     (c.general?GEN_ORDER:CAT_ORDER).push(c.id)});
 }
 function allCats(){return CAT_ORDER.concat(GEN_ORDER)}
-function defSettings(){return{title:'Planta 5',shiftStart:'07:30',shiftEnd:'15:00',meals:{DE:'09:00',CO:'13:00',ME:'17:00',CE:'19:30',AC:'21:00'},hoyCats:{oxigeno:false,siesta:false},selFloors:null}}
+function defSettings(){return{title:'Planta 5',shiftStart:'07:30',shiftEnd:'15:00',meals:{DE:'09:00',CO:'13:00',ME:'17:00',CE:'19:30',AC:'21:00'},hoyCats:{oxigeno:false,siesta:false,cronico:false,peg:false},selFloors:null}}
 function defControls(){return[
   {id:'mna',name:'MNA completo',months:6,monthsMal:3,shortMal:true,kind:'mna',unit:'Puntuación'},
   {id:'norton',name:'Norton',months:6,kind:'norton',unit:'Puntuación'},
@@ -233,15 +234,16 @@ function defControls(){return[
   {id:'peso',name:'Peso',months:6,monthsMal:3,shortMal:true,unit:'kg'},
   {id:'cv',name:'Constantes (TA, FC, SatO₂)',months:1,unit:'TA / FC / SatO₂'},
   {id:'gluc',name:'Glucemia',months:6,unit:'mg/dl'}]}
-function emptyDB(){return{v:1,settings:defSettings(),controls:defControls(),residents:[],records:[],open:[],pautas:[],done:{},custom:[],log:[],mig:2}}
+function emptyDB(){return{v:1,settings:defSettings(),controls:defControls(),residents:[],records:[],open:[],pautas:[],done:{},custom:[],catOver:{},log:[],mig:2}}
 function normalize(d){
   var e=emptyDB();d=d&&typeof d==='object'?d:{};
   ['residents','records','open','pautas'].forEach(function(k){if(!Array.isArray(d[k]))d[k]=[]});
   if(!d.done||typeof d.done!=='object')d.done={};
-  syncCats(Array.isArray(d.custom)?d.custom:(d.custom=[]));
+  if(!d.catOver||typeof d.catOver!=='object')d.catOver={};
+  syncCats(Array.isArray(d.custom)?d.custom:(d.custom=[]),d.catOver);
   if(!Array.isArray(d.log))d.log=[];
   d.settings=Object.assign(e.settings,d.settings||{});d.settings.meals=Object.assign(defSettings().meals,d.settings.meals||{});
-  d.settings.hoyCats=Object.assign({oxigeno:false,siesta:false},d.settings.hoyCats||{});if(!Array.isArray(d.settings.selFloors))d.settings.selFloors=null;
+  d.settings.hoyCats=Object.assign({oxigeno:false,siesta:false,cronico:false,peg:false},d.settings.hoyCats||{});if(!Array.isArray(d.settings.selFloors))d.settings.selFloors=null;
   if(!Array.isArray(d.controls)||!d.controls.length)d.controls=e.controls;
   d.pautas.forEach(function(p){p.sched=p.sched||{type:'none'};p.slots=Array.isArray(p.slots)?p.slots:[];if(!CATS[p.cat])p.cat='agudo'});
   d.residents.forEach(function(r){if(r.active===undefined)r.active=true;r.name=r.name||'';r.info=r.info||''});
@@ -571,7 +573,7 @@ function vListas(){
   var cats=allCats();
   var h='<div class="top"><h1>Listas</h1><button class="btn sm" data-act="print">Imprimir</button><button class="btn sm primary" data-act="addP" data-cat="'+ctx.cat+'">+ Añadir</button></div>';
   h+='<div class="chips">'+cats.map(function(k){return '<button class="chip" data-act="cat" data-cat="'+k+'" aria-pressed="'+(ctx.cat===k)+'">'+esc(CATS[k].l)+'</button>'}).join('')+'</div>';
-  h+='<div class="actions noprint" style="margin:0 0 8px"><button class="btn sm" data-act="newCat">+ Nuevo apartado</button>'+(CATS[ctx.cat].custom?'<button class="btn sm" data-act="editCat">Editar este apartado</button>':'')+'</div>';
+  h+='<div class="actions noprint" style="margin:0 0 8px"><button class="btn sm" data-act="newCat">+ Nuevo apartado</button>'+'<button class="btn sm" data-act="editCat">Editar este apartado</button>'+'</div>';
   h+='<input type="search" placeholder="Buscar (fármaco, habitación, nombre…)" data-in="q" value="'+esc(ctx.q)+'">';
   return h+'<div id="results">'+listResults()+'</div>';
 }
@@ -876,6 +878,19 @@ function evoNote(){
   });
 }
 function catDlg(k){
+  if(k&&!CATS[k].custom){
+    var B=CATS[k];
+    openDlg('<h3>Editar apartado</h3><label class="f">Nombre del apartado</label><input type="text" name="l" required value="'+esc(B.l)+'">'+
+      (k==='general'?'':'<label class="f">Nombre del primer campo</label><input type="text" name="name" value="'+esc(B.name)+'">'+
+      '<label class="f">Campo de dosis (vacío = sin dosis)</label><input type="text" name="dose" value="'+esc(B.dose||'')+'">'+
+      '<label class="f">Campo de detalle</label><input type="text" name="detail" value="'+esc(B.detail)+'">')+
+      '<div class="actions"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>'+
+      '<div class="actions"><button type="button" class="btn danger" id="rstCat">Volver a los nombres originales</button></div>',function(f){
+      db.catOver[k]=k==='general'?{l:v(f,'l')}:{l:v(f,'l'),name:v(f,'name'),dose:v(f,'dose')||null,detail:v(f,'detail')};
+      syncCats(db.custom,db.catOver);save();render();toast('Guardado')});
+    $('#rstCat').onclick=function(){delete db.catOver[k];syncCats(db.custom,db.catOver);save();dlg.close();render()};
+    return;
+  }
   var c=k?db.custom.find(function(x){return x.id===k}):null,isNew=!c;
   c=c||{id:uid('x_'),l:'',general:false,dose:false,name:'Nombre',detail:'Detalle'};
   openDlg('<h3>'+(isNew?'Nuevo apartado':'Editar apartado')+'</h3>'+
@@ -888,13 +903,13 @@ function catDlg(k){
     (isNew?'':'<div class="actions"><button type="button" class="btn danger" id="delCat">Eliminar apartado y sus pautas</button></div>'),function(f){
     c.l=v(f,'l');c.name=v(f,'name')||'Nombre';c.detail=v(f,'detail')||'Detalle';c.dose=f.elements.dose.checked;
     if(isNew){c.general=v(f,'g')==='1';db.custom.push(c)}
-    syncCats(db.custom);ctx.cat=c.id;save();render();toast('Guardado');
+    syncCats(db.custom,db.catOver);ctx.cat=c.id;save();render();toast('Guardado');
   });
   var d=$('#delCat');if(d)d.onclick=function(){
     var n=db.pautas.filter(function(p){return p.cat===c.id}).length;
     if(!confirm('¿Eliminar el apartado «'+c.l+'» y sus '+n+' pautas? No se puede deshacer.'))return;
     db.pautas=db.pautas.filter(function(p){return p.cat!==c.id});db.custom=db.custom.filter(function(x){return x!==c});
-    syncCats(db.custom);ctx.cat='cronico';save();dlg.close();render()};
+    syncCats(db.custom,db.catOver);ctx.cat='cronico';save();dlg.close();render()};
 }
 function bulkBeds(){
   openDlg('<h3>Añadir camas por bloque</h3><div class="two"><div><label class="f">Planta</label><input type="text" name="fl" value="04" inputmode="numeric"></div><div><label class="f">Módulo (letra)</label><input type="text" name="mod" value="A" maxlength="1"></div></div>'+

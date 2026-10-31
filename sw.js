@@ -1,6 +1,6 @@
 // Guarda la app en el dispositivo para que funcione sin conexión.
 // No guarda ni envía datos de residentes: esos viven solo en el almacenamiento del navegador.
-const CACHE = 'planta-v3';
+const CACHE = 'planta-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
